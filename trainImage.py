@@ -10,9 +10,15 @@ from PIL import ImageTk, Image
 # Train Image
 def TrainImage(haarcasecade_path, trainimage_path, trainimagelabel_path, message,text_to_speech):
     recognizer = cv2.face.LBPHFaceRecognizer_create()
-    detector = cv2.CascadeClassifier(haarcasecade_path)
     faces, Id = getImagesAndLables(trainimage_path)
+    if not faces:
+        res = "No training images found. Take images before training."
+        message.configure(text=res)
+        text_to_speech(res)
+        return
+
     recognizer.train(faces, np.array(Id))
+    os.makedirs(os.path.dirname(os.path.abspath(trainimagelabel_path)), exist_ok=True)
     recognizer.save(trainimagelabel_path)
     res = "Image Trained successfully"  # +",".join(str(f) for f in Id)
     message.configure(text=res)

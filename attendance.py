@@ -29,16 +29,23 @@ def text_to_speech(user_text):
     engine.runAndWait()
 
 
-haarcasecade_path = "haarcascade_frontalface_default.xml"
-trainimagelabel_path = (
-    "./TrainingImageLabel/Trainner.yml"
+project_path = os.path.dirname(os.path.abspath(__file__))
+haarcasecade_path = os.path.join(project_path, "haarcascade_frontalface_default.xml")
+trainimagelabel_path = os.path.join(project_path, "TrainingImageLabel", "Trainner.yml")
+trainimage_path = os.path.join(project_path, "TrainingImage")
+legacy_trainimage_path = os.path.join(
+    os.path.splitdrive(project_path)[0] + os.sep, "TrainingImage"
 )
-trainimage_path = "/TrainingImage"
-if not os.path.exists(trainimage_path):
-    os.makedirs(trainimage_path)
+if (
+    not os.listdir(trainimage_path)
+    and os.path.isdir(legacy_trainimage_path)
+    and os.listdir(legacy_trainimage_path)
+):
+    trainimage_path = legacy_trainimage_path
+os.makedirs(trainimage_path, exist_ok=True)
 
-studentdetail_path = (
-    "./StudentDetails/studentdetails.csv"
+studentdetail_path = os.path.join(
+    project_path, "StudentDetails", "studentdetails.csv"
 )
 attendance_path = "Attendance"
 
@@ -238,7 +245,7 @@ def TakeImageUI():
     def take_image():
         l1 = txt1.get()
         l2 = txt2.get()
-        takeImage.TakeImage(
+        captured = takeImage.TakeImage(
             l1,
             l2,
             haarcasecade_path,
@@ -247,8 +254,9 @@ def TakeImageUI():
             err_screen,
             text_to_speech,
         )
-        txt1.delete(0, "end")
-        txt2.delete(0, "end")
+        if captured:
+            txt1.delete(0, "end")
+            txt2.delete(0, "end")
 
     # take Image button
     # image

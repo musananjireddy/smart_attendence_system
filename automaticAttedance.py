@@ -8,184 +8,147 @@ from PIL import ImageTk, Image
 import pandas as pd
 import datetime
 import time
+import re
 import tkinter.ttk as tkk
 import tkinter.font as font
+from student_records import load_student_records
 
-haarcasecade_path = "haarcascade_frontalface_default.xml"
-trainimagelabel_path = (
-    "TrainingImageLabel\\Trainner.yml"
+project_path = os.path.dirname(os.path.abspath(__file__))
+haarcasecade_path = os.path.join(project_path, "haarcascade_frontalface_default.xml")
+trainimagelabel_path = os.path.join(project_path, "TrainingImageLabel", "Trainner.yml")
+trainimage_path = os.path.join(project_path, "TrainingImage")
+legacy_trainimage_path = os.path.join(
+    os.path.splitdrive(project_path)[0] + os.sep, "TrainingImage"
 )
-trainimage_path = "TrainingImage"
-studentdetail_path = (
-    "StudentDetails\\studentdetails.csv"
+if (
+    not os.listdir(trainimage_path)
+    and os.path.isdir(legacy_trainimage_path)
+    and os.listdir(legacy_trainimage_path)
+):
+    trainimage_path = legacy_trainimage_path
+studentdetail_path = os.path.join(
+    project_path, "StudentDetails", "studentdetails.csv"
 )
-attendance_path = "Attendance"
+attendance_path = os.path.join(project_path, "Attendance")
 # for choose subject and fill attendance
 def subjectChoose(text_to_speech):
     def FillAttendance():
-        sub = tx.get()
-        now = time.time()
-        future = now + 20
-        print(now)
-        print(future)
-        if sub == "":
-            t = "Please enter the subject name!!!"
-            text_to_speech(t)
-        else:
-            try:
-                recognizer = cv2.face.LBPHFaceRecognizer_create()
-                try:
-                    recognizer.read(trainimagelabel_path)
-                except:
-                    e = "Model not found,please train model"
-                    Notifica.configure(
-                        text=e,
-                        bg="black",
-                        fg="yellow",
-                        width=33,
-                        font=("times", 15, "bold"),
-                    )
-                    Notifica.place(x=20, y=250)
-                    text_to_speech(e)
-                facecasCade = cv2.CascadeClassifier(haarcasecade_path)
-                df = pd.read_csv(studentdetail_path)
-                cam = cv2.VideoCapture(0)
-                font = cv2.FONT_HERSHEY_SIMPLEX
-                col_names = ["Enrollment", "Name"]
-                attendance = pd.DataFrame(columns=col_names)
-                while True:
-                    ___, im = cam.read()
-                    gray = cv2.cvtColor(im, cv2.COLOR_BGR2GRAY)
-                    faces = facecasCade.detectMultiScale(gray, 1.2, 5)
-                    for (x, y, w, h) in faces:
-                        global Id
+        subject_name = tx.get().strip()
+        if not subject_name:
+            notify("Please enter a subject name.")
+            return
+        if not re.fullmatch(r"[A-Za-z0-9 _-]+", subject_name):
+            notify("Use only letters, numbers, spaces, hyphens, or underscores in the subject.")
+            return
+        if not os.path.isfile(trainimagelabel_path):
+            notify("Model not found. Capture student images and click Train Image first.")
+            return
 
-                        Id, conf = recognizer.predict(gray[y : y + h, x : x + w])
-                        if conf < 70:
-                            print(conf)
-                            global Subject
-                            global aa
-                            global date
-                            global timeStamp
-                            Subject = tx.get()
-                            ts = time.time()
-                            date = datetime.datetime.fromtimestamp(ts).strftime(
-                                "%Y-%m-%d"
-                            )
-                            timeStamp = datetime.datetime.fromtimestamp(ts).strftime(
-                                "%H:%M:%S"
-                            )
-                            aa = df.loc[df["Enrollment"] == Id]["Name"].values
-                            global tt
-                            tt = str(Id) + "-" + aa
-                            # En='1604501160'+str(Id)
-                            attendance.loc[len(attendance)] = [
-                                Id,
-                                aa,
-                            ]
-                            cv2.rectangle(im, (x, y), (x + w, y + h), (0, 260, 0), 4)
-                            cv2.putText(
-                                im, str(tt), (x + h, y), font, 1, (255, 255, 0,), 4
-                            )
-                        else:
-                            Id = "Unknown"
-                            tt = str(Id)
-                            cv2.rectangle(im, (x, y), (x + w, y + h), (0, 25, 255), 7)
-                            cv2.putText(
-                                im, str(tt), (x + h, y), font, 1, (0, 25, 255), 4
-                            )
-                    if time.time() > future:
-                        break
+        try:
+            students = load_student_records(studentdetail_path, trainimage_path)
+        except (OSError, csv.Error) as error:
+            notify(f"Could not load student records: {error}")
+            return
+        if not students:
+            notify("No student records found. Register students and train the model first.")
+            return
 
-                    attendance = attendance.drop_duplicates(
-                        ["Enrollment"], keep="first"
-                    )
-                    cv2.imshow("Filling Attendance...", im)
-                    key = cv2.waitKey(30) & 0xFF
-                    if key == 27:
-                        break
+        recognizer = cv2.face.LBPHFaceRecognizer_create()
+        try:
+            recognizer.read(trainimagelabel_path)
+        except cv2.error as error:
+            notify(f"Could not load the trained model: {error}")
+            return
 
-                ts = time.time()
-                print(aa)
-                # attendance["date"] = date
-                # attendance["Attendance"] = "P"
-                attendance[date] = 1
-                date = datetime.datetime.fromtimestamp(ts).strftime("%Y-%m-%d")
-                timeStamp = datetime.datetime.fromtimestamp(ts).strftime("%H:%M:%S")
-                Hour, Minute, Second = timeStamp.split(":")
-                # fileName = "Attendance/" + Subject + ".csv"
-                path = os.path.join(attendance_path, Subject)
-                if not os.path.exists(path):
-                    os.makedirs(path)
-                fileName = (
-                    f"{path}/"
-                    + Subject
-                    + "_"
-                    + date
-                    + "_"
-                    + Hour
-                    + "-"
-                    + Minute
-                    + "-"
-                    + Second
-                    + ".csv"
-                )
-                attendance = attendance.drop_duplicates(["Enrollment"], keep="first")
-                print(attendance)
-                attendance.to_csv(fileName, index=False)
+        face_cascade = cv2.CascadeClassifier(haarcasecade_path)
+        if face_cascade.empty():
+            notify("Could not load the face detector. Check the Haar cascade file.")
+            return
 
-                m = "Attendance Filled Successfully of " + Subject
-                Notifica.configure(
-                    text=m,
-                    bg="black",
-                    fg="yellow",
-                    width=33,
-                    relief=RIDGE,
-                    bd=5,
-                    font=("times", 15, "bold"),
-                )
-                text_to_speech(m)
+        cam = cv2.VideoCapture(0)
+        if not cam.isOpened():
+            cam.release()
+            notify("Could not open the camera. Check camera permissions and close other camera apps.")
+            return
 
-                Notifica.place(x=20, y=250)
+        recognized = {}
+        deadline = time.time() + 20
+        camera_error = None
+        try:
+            while time.time() < deadline:
+                success, frame = cam.read()
+                if not success or frame is None:
+                    camera_error = "Could not read a frame from the camera."
+                    break
 
-                cam.release()
-                cv2.destroyAllWindows()
+                gray = cv2.cvtColor(frame, cv2.COLOR_BGR2GRAY)
+                faces = face_cascade.detectMultiScale(gray, 1.2, 5)
+                for (x, y, w, h) in faces:
+                    student_id, confidence = recognizer.predict(gray[y : y + h, x : x + w])
+                    student_id = str(student_id)
+                    name = students.get(student_id) if confidence < 70 else None
+                    if name:
+                        recognized[student_id] = name
+                        label = f"{name} ({student_id})"
+                        color = (0, 220, 0)
+                    else:
+                        label = "Unknown"
+                        color = (0, 25, 255)
+                    cv2.rectangle(frame, (x, y), (x + w, y + h), color, 3)
+                    cv2.putText(frame, label, (x, max(y - 10, 20)),
+                                cv2.FONT_HERSHEY_SIMPLEX, 0.7, color, 2)
 
-                import csv
-                import tkinter
+                cv2.imshow("Filling Attendance - press Esc to finish", frame)
+                if cv2.waitKey(30) & 0xFF == 27:
+                    break
+        except cv2.error as error:
+            camera_error = f"Camera or face recognition error: {error}"
+        finally:
+            cam.release()
+            cv2.destroyAllWindows()
 
-                root = tkinter.Tk()
-                root.title("Attendance of " + Subject)
-                root.configure(background="black")
-                cs = os.path.join(path, fileName)
-                print(cs)
-                with open(cs, newline="") as file:
-                    reader = csv.reader(file)
-                    r = 0
+        if camera_error:
+            notify(camera_error)
+            return
+        if not recognized:
+            notify("No registered student was recognized. Face the camera with good lighting and try again.")
+            return
 
-                    for col in reader:
-                        c = 0
-                        for row in col:
+        timestamp = datetime.datetime.now()
+        date_column = timestamp.strftime("%Y-%m-%d")
+        session_stamp = timestamp.strftime("%Y-%m-%d_%H-%M-%S")
+        session_path = os.path.join(attendance_path, subject_name)
+        os.makedirs(session_path, exist_ok=True)
+        attendance = pd.DataFrame(
+            [
+                {"Enrollment": student_id, "Name": name, date_column: 1}
+                for student_id, name in recognized.items()
+            ]
+        )
+        output_path = os.path.join(
+            session_path, f"{subject_name}_{session_stamp}.csv"
+        )
+        try:
+            attendance.to_csv(output_path, index=False)
+        except OSError as error:
+            notify(f"Could not save attendance: {error}")
+            return
+        notify(
+            f"Attendance saved for {len(recognized)} student(s) in {subject_name}."
+        )
 
-                            label = tkinter.Label(
-                                root,
-                                width=10,
-                                height=1,
-                                fg="yellow",
-                                font=("times", 15, " bold "),
-                                bg="black",
-                                text=row,
-                                relief=tkinter.RIDGE,
-                            )
-                            label.grid(row=r, column=c)
-                            c += 1
-                        r += 1
-                root.mainloop()
-                print(attendance)
-            except:
-                f = "No Face found for attendance"
-                text_to_speech(f)
-                cv2.destroyAllWindows()
+    def notify(message):
+        Notifica.configure(
+            text=message,
+            bg="black",
+            fg="yellow",
+            width=55,
+            relief=RIDGE,
+            bd=5,
+            font=("times", 12, "bold"),
+        )
+        Notifica.place(x=20, y=250)
+        text_to_speech(message)
 
     ###windo is frame for subject chooser
     subject = Tk()
@@ -225,9 +188,11 @@ def subjectChoose(text_to_speech):
             t = "Please enter the subject name!!!"
             text_to_speech(t)
         else:
-            os.startfile(
-                f"Attendance\\{sub}"
-            )
+                folder = os.path.join(attendance_path, sub)
+                if os.path.isdir(folder):
+                    os.startfile(folder)
+                else:
+                    notify("No attendance sheets found for this subject yet.")
 
     attf = tk.Button(
         subject,
